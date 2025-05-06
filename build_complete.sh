@@ -76,7 +76,7 @@ if [ "$arch" != "$host_arch" ]; then
       print_info "automatically installing qemu-user-static because we are building for a different architecture"
       apt-get install qemu-user-static binfmt-support -y
     fi
-  else 
+  else
     print_error "Warning: You are building an image for a different CPU architecture. It may fail if you do not have qemu-user-static installed."
     sleep 1
   fi
@@ -91,7 +91,7 @@ sigint_handler() {
 }
 trap sigint_handler SIGINT
 
-shim_url="https://dl.darkn.bio/api/raw/?path=/SH1mmer/$board.zip"
+shim_url="https://dl.fanqyxl.net/ChromeOS/Raw%20Shims/$board.bin"
 boards_url="https://chromiumdash.appspot.com/cros/fetch_serving_builds?deviceCategory=ChromeOS"
 
 if [ -z "$data_dir" ]; then
@@ -109,7 +109,7 @@ board_name = sys.argv[1]
 if not board_name in all_builds["builds"]:
   print("Invalid board name: " + board_name, file=sys.stderr)
   sys.exit(1)
-  
+
 board = all_builds["builds"][board_name]
 if "models" in board:
   for device in board["models"].values():
@@ -123,7 +123,7 @@ print(reco_url)
 print_info "found url: $reco_url"
 
 shim_bin="$data_dir/shim_$board.bin"
-shim_zip="$data_dir/shim_$board.zip"
+# shim_zip="$data_dir/shim_$board.zip" # not used anymore
 reco_bin="$data_dir/reco_$board.bin"
 reco_zip="$data_dir/reco_$board.zip"
 mkdir -p "$data_dir"
@@ -154,6 +154,18 @@ download_and_unzip() {
   fi
 }
 
+download_and_save() {
+  local url="$1"
+  local bin_path="$2"
+  if [ ! -f "$bin_path" ]; then
+    if [ ! "$quiet" ]; then
+      wget -q --show-progress "$url" -O "$bin_path" -c
+    else
+      wget -q "$url" -O "$bin_path" -c
+    fi
+  fi
+}
+
 retry_cmd() {
   local cmd="$@"
   for i in 1 2 3 4 5; do
@@ -162,10 +174,10 @@ retry_cmd() {
 }
 
 print_title "downloading recovery image"
-download_and_unzip $reco_url $reco_zip $reco_bin
+download_and_unzip "$reco_url" "$reco_zip" "$reco_bin"
 
 print_title "downloading shim image"
-download_and_unzip $shim_url $shim_zip $shim_bin
+download_and_save "$shim_url" "$shim_bin"
 
 print_title "building $distro rootfs"
 if [ ! "$rootfs_dir" ]; then
@@ -200,22 +212,22 @@ if [ ! "$rootfs_dir" ]; then
     fi
   fi
 
-  ./build_rootfs.sh $rootfs_dir $release \
-    custom_packages=$desktop_package \
-    hostname=shimboot-$board \
-    username=user \
-    user_passwd=user \
-    arch=$arch \
-    distro=$distro
+  ./build_rootfs.sh "$rootfs_dir" "$release" \
+    custom_packages="$desktop_package" \
+    hostname="shimboot-$board" \
+    username="user" \
+    user_passwd="user" \
+    arch="$arch" \
+    distro="$distro"
 fi
 
 print_title "patching $distro rootfs"
-retry_cmd ./patch_rootfs.sh $shim_bin $reco_bin $rootfs_dir "quiet=$quiet"
+retry_cmd ./patch_rootfs.sh "$shim_bin" "$reco_bin" "$rootfs_dir" "quiet=$quiet"
 
 print_title "building final disk image"
 final_image="$data_dir/shimboot_$board.bin"
-rm -rf $final_image
-retry_cmd ./build.sh $final_image $shim_bin $rootfs_dir "quiet=$quiet" "arch=$arch" "name=$distro"
+rm -rf "$final_image"
+retry_cmd ./build.sh "$final_image" "$shim_bin" "$rootfs_dir" "quiet=$quiet" "arch=$arch" "name=$distro"
 print_info "build complete! the final disk image is located at $final_image"
 
 print_title "cleaning up"
@@ -224,7 +236,7 @@ clean_loops
 if [ "$compress_img" ]; then
   image_zip="$data_dir/shimboot_$board.zip"
   print_title "compressing disk image into a zip file"
-  zip -j $image_zip $final_image
+  zip -j "$image_zip" "$final_image"
   print_info "finished compressing the disk file"
-  print_info "the finished zip file can be found at $image_zip" 
+  print_info "the finished zip file can be found at $image_zip"
 fi
